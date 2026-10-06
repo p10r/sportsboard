@@ -4,6 +4,8 @@ import { createBasketballEditor } from '../sports/basketball/editor.js';
 import type { BasketballMessages } from '../sports/basketball/i18n.js';
 import { createFootballEditor } from '../sports/football/editor.js';
 import type { FootballMessages } from '../sports/football/i18n.js';
+import { createVolleyballEditor } from '../sports/volleyball/editor.js';
+import type { VolleyballMessages } from '../sports/volleyball/i18n.js';
 import { mountElementStyles } from './styles.js';
 import {
   booleanAttribute,
@@ -123,7 +125,9 @@ export class SportsBoardEditorElement extends HTMLElementBase {
     const data = resolveElementData(this, this.documentData, options.data);
     const sport = identity.sport === 'football'
       ? createFootballEditor(identity.locale, options.sportMessages as Partial<FootballMessages>)
-      : createBasketballEditor(identity.locale, options.sportMessages as Partial<BasketballMessages>);
+      : identity.sport === 'volleyball'
+        ? createVolleyballEditor(identity.locale, options.sportMessages as Partial<VolleyballMessages>)
+        : createBasketballEditor(identity.locale, options.sportMessages as Partial<BasketballMessages>);
 
     this.instance?.destroy();
     this.instance = new SportsBoardEditor(this, {
