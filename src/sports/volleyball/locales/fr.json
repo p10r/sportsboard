@@ -7,7 +7,7 @@
   "cone": "Plot", "coneDescription": "Plot d’entraînement",
   "run": "Course", "runDescription": "Course libre ou attachée à des éléments",
   "pass": "Passe", "passDescription": "Passe libre ou attachée à des éléments",
-  "set": "Touche", "setDescription": "Touche libre ou attachée à des éléments",
+  "set": "Passe haute", "setDescription": "Passe haute libre ou attachée à des éléments",
   "spike": "Attaque", "spikeDescription": "Attaque libre ou attachée à des éléments",
   "block": "Contre", "blockDescription": "Contre libre ou attaché à des éléments"
 }

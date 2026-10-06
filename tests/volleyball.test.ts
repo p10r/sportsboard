@@ -78,7 +78,7 @@ describe('volleyball module', () => {
     expect(editor.surfaces[0].label).toBe('Demi-terrain');
     expect(editor.groups[0].label).toBe('Attaquants');
     expect(editor.elements.find(tool => tool.id === 'cone')?.label).toBe('Plot');
-    expect(editor.connectors.find(tool => tool.id === 'set')?.label).toBe('Touche');
+    expect(editor.connectors.find(tool => tool.id === 'set')?.label).toBe('Passe haute');
     expect(editor.connectors.find(tool => tool.id === 'spike')?.label).toBe('Attaque');
     expect(editor.connectors.find(tool => tool.id === 'block')?.label).toBe('Contre');
   });

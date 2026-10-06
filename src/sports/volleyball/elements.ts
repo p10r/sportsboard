@@ -1,35 +1,5 @@
 import Konva from 'konva';
-import type { BoardElement, Registry, RenderContext } from '../../core/index.js';
-
-interface ElementBox {
-  group: Konva.Group;
-  width: number;
-  height: number;
-}
-
-const elementBox = (
-  element: BoardElement,
-  context: RenderContext,
-  defaultWidth: number,
-  defaultHeight: number,
-  aspectRatio = 1
-): ElementBox => {
-  const rawWidth = (element.width ?? defaultWidth) * context.width;
-  const rawHeight = (element.height ?? defaultHeight) * context.height;
-  const width = Math.sqrt(Math.max(1, rawWidth * rawHeight) / aspectRatio);
-  const height = width * aspectRatio;
-  const group = new Konva.Group({
-    x: (element.x ?? 0) * context.width,
-    y: (element.y ?? 0) * context.height,
-    width,
-    height,
-    offsetX: width / 2,
-    offsetY: height / 2,
-    rotation: element.rotation ?? 0
-  });
-  group.add(new Konva.Rect({ width, height, fill: 'rgba(0,0,0,.001)' }));
-  return { group, width, height };
-};
+import { elementBox, elementColor, type BoardElement, type Registry, type RenderContext } from '../../core/index.js';
 
 const player = (defense: boolean) => (element: BoardElement, context: RenderContext): Konva.Group => {
   const { group, width, height } = elementBox(element, context, .07, .07);
@@ -118,6 +88,7 @@ const ball = (element: BoardElement, context: RenderContext): Konva.Group => {
   const radius = Math.min(width, height) * .43;
   const center = { x: width / 2, y: height / 2 };
   const edge = '#0f172a';
+  const baseColor = elementColor(element, '#cbd5e1');
   const seamWidth = Math.max(1.4, width * .035);
 
   group.add(new Konva.Ellipse({
@@ -135,7 +106,7 @@ const ball = (element: BoardElement, context: RenderContext): Konva.Group => {
     fillRadialGradientStartRadius: 0,
     fillRadialGradientEndPoint: { x: center.x + radius * .22, y: center.y + radius * .28 },
     fillRadialGradientEndRadius: radius * 1.2,
-    fillRadialGradientColorStops: [0, '#ffffff', .55, '#f1f5f9', 1, '#cbd5e1'],
+    fillRadialGradientColorStops: [0, '#ffffff', .55, '#f1f5f9', 1, baseColor],
     stroke: edge,
     strokeWidth: seamWidth,
     shadowColor: '#0f172a',

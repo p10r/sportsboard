@@ -1,12 +1,7 @@
 import type { BoardDocument, BoardImageOptions } from '../core/index.js';
-import { createBasketballViewer } from '../sports/basketball/viewer.js';
-import type { BasketballMessages } from '../sports/basketball/i18n.js';
-import { createFootballViewer } from '../sports/football/viewer.js';
-import type { FootballMessages } from '../sports/football/i18n.js';
-import { createVolleyballViewer } from '../sports/volleyball/viewer.js';
-import type { VolleyballMessages } from '../sports/volleyball/i18n.js';
 import { resolveViewerMessages, SportsBoardCanvas, type SportsBoardCanvasOptions } from '../viewer/index.js';
 import { mountElementStyles } from './styles.js';
+import { viewerFactories } from './sports.js';
 import {
   booleanAttribute,
   clone,
@@ -115,11 +110,7 @@ export class SportsBoardViewerElement extends HTMLElementBase {
     const options = this.resolveOptions();
     const identity = resolveIdentity(this, options);
     const data = resolveElementData(this, this.documentData, options.data);
-    const sport = identity.sport === 'football'
-      ? createFootballViewer(identity.locale, options.sportMessages as Partial<FootballMessages>)
-      : identity.sport === 'volleyball'
-        ? createVolleyballViewer(identity.locale, options.sportMessages as Partial<VolleyballMessages>)
-        : createBasketballViewer(identity.locale, options.sportMessages as Partial<BasketballMessages>);
+    const sport = viewerFactories[identity.sport](identity.locale, options.sportMessages);
     if (!this.hasAttribute('aria-label')) {
       this.setAttribute('aria-label', resolveViewerMessages(identity.locale, options.messages).boardLabel);
     }
