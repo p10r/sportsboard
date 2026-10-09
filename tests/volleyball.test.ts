@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import Konva from 'konva';
-import { validateBoardDocument, type BoardDocument } from '../src/core/index.js';
+import { surfaceVariant, validateBoardDocument, type BoardDocument } from '../src/core/index.js';
 import { Volleyball, createVolleyballViewer } from '../src/sports/volleyball/viewer-entry.js';
 import { createVolleyballEditor } from '../src/sports/volleyball/editor.js';
 import { attachToSelectedMagnetTarget } from '../src/editor/change.js';
@@ -26,6 +26,14 @@ describe('volleyball module', () => {
     const registry = createVolleyballViewer().createRegistry();
     expect(() => validateBoardDocument(documentFor(surface), registry)).not.toThrow();
     expect(registry.getSurface(surface).ratio).toBeGreaterThan(0);
+  });
+
+  it('opts only the full court into the rotated portrait rendering', () => {
+    const registry = createVolleyballViewer().createRegistry();
+    expect(registry.getSurface(Volleyball.surfaces.halfCourt).portrait).toBeUndefined();
+    const full = registry.getSurface(Volleyball.surfaces.fullCourt);
+    expect(full.portrait).toBe(true);
+    expect(surfaceVariant(full, 'portrait').ratio).toBeCloseTo(1 / full.ratio);
   });
 
   it('keeps the ball smaller than a player and only snaps it to players and coaches', () => {

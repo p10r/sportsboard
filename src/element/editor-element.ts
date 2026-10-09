@@ -3,6 +3,7 @@ import { SportsBoardEditor } from '../editor/index.js';
 import { mountElementStyles } from './styles.js';
 import { editorFactories } from './sports.js';
 import {
+  assertOrientationPreference,
   booleanAttribute,
   clone,
   copyOptions,
@@ -11,6 +12,7 @@ import {
   parseJSON,
   resolveElementData,
   resolveIdentity,
+  resolveOrientationPreference,
   upgradeProperty
 } from './shared.js';
 import type {
@@ -21,7 +23,7 @@ import type {
   SportsBoardElementSaveDetail
 } from './types.js';
 
-const observedAttributes = ['sport', 'locale', 'surface', 'show-save', 'data', 'options'];
+const observedAttributes = ['sport', 'locale', 'surface', 'orientation', 'show-save', 'data', 'options'];
 
 /** Complete editing interface for one built-in sport. */
 export class SportsBoardEditorElement extends HTMLElementBase {
@@ -127,6 +129,7 @@ export class SportsBoardEditorElement extends HTMLElementBase {
       surface: identity.surface,
       locale: identity.locale,
       messages: options.messages,
+      orientation: options.orientation ?? resolveOrientationPreference(this),
       showSave: options.showSave,
       saveLabel: options.saveLabel,
       colorPalette: options.colorPalette,
@@ -149,6 +152,7 @@ export class SportsBoardEditorElement extends HTMLElementBase {
 
   private bindInstance(instance: SportsBoardEditor): void {
     instance.addEventListener('viewportchange', event => emit(this, 'viewportchange', (event as CustomEvent).detail));
+    instance.addEventListener('orientationchange', event => emit(this, 'orientationchange', (event as CustomEvent).detail));
     instance.addEventListener('change', event => {
       const document = (event as CustomEvent<{ document: BoardDocument }>).detail.document;
       this.documentData = document;
@@ -167,11 +171,13 @@ export class SportsBoardEditorElement extends HTMLElementBase {
   private resolveOptions(): SportsBoardEditorElementOptions {
     const serialized = this.getAttribute('options');
     const attributeOptions = serialized ? parseJSON<SportsBoardEditorElementOptions>(serialized, 'options attribute') : {};
-    return {
+    const options = {
       ...attributeOptions,
       ...this.elementOptions,
       showSave: booleanAttribute(this, 'show-save') ?? this.elementOptions.showSave ?? attributeOptions.showSave
     };
+    assertOrientationPreference(options.orientation);
+    return options;
   }
 
   private scheduleMount(): void {

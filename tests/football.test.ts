@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import Konva from 'konva';
-import { validateBoardDocument, type BoardDocument } from '../src/core/index.js';
+import { surfaceVariant, validateBoardDocument, type BoardDocument } from '../src/core/index.js';
 import { Football, createFootballViewer } from '../src/sports/football/viewer-entry.js';
 
 const documentFor = (surface: string): BoardDocument => ({
@@ -19,6 +19,14 @@ describe('football module', () => {
     const registry = createFootballViewer().createRegistry();
     expect(() => validateBoardDocument(documentFor(surface), registry)).not.toThrow();
     expect(registry.getSurface(surface).ratio).toBeGreaterThan(1);
+  });
+
+  it('opts only the full pitch into the rotated portrait rendering', () => {
+    const registry = createFootballViewer().createRegistry();
+    expect(registry.getSurface(Football.surfaces.halfPitch).portrait).toBeUndefined();
+    const full = registry.getSurface(Football.surfaces.fullPitch);
+    expect(full.portrait).toBe(true);
+    expect(surfaceVariant(full, 'portrait').ratio).toBeCloseTo(1 / full.ratio);
   });
 
   it('keeps the ball smaller than a player and only snaps it to players', () => {

@@ -232,13 +232,21 @@ export class SportsBoardEditor extends EventTarget {
       controls: true,
       locale: this.options.locale,
       messages: this.messages,
+      orientation: this.options.orientation,
+      // The board frame sizes itself from the ratio, so the orientation must be
+      // decided against the workspace box that contains the frame.
+      orientationSource: this.query<HTMLElement>('.sb-editor__workspace'),
       registry: this.sport.createRegistry()
     });
     this.canvasElement.addEventListener('viewportchange', event => {
       this.dispatchEvent(new CustomEvent('viewportchange', { detail: (event as CustomEvent).detail }));
     });
+    this.canvasElement.addEventListener('orientationchange', event => {
+      this.dispatchEvent(new CustomEvent('orientationchange', { detail: (event as CustomEvent).detail }));
+    });
     this.board = this.canvas.getBoard();
-    this.applySurfaceRatio(surface);
+    this.board.addEventListener('orientationchange', () => this.applySurfaceRatio());
+    this.applySurfaceRatio();
     this.board.addEventListener('change', event => {
       const detail = (event as CustomEvent<BoardChangeDetail>).detail;
       if (shouldRefreshColorPalette(detail)) this.renderColorPicker();
@@ -259,7 +267,7 @@ export class SportsBoardEditor extends EventTarget {
       button.addEventListener('click', () => {
         try {
           this.board.setSurface(surface.id);
-          this.applySurfaceRatio(surface.id);
+          this.applySurfaceRatio();
           this.renderSurfaceButtons(surface.id);
           this.setStatus(this.message('surfaceActivated', { label: surface.label }), 'success');
         } catch (error) { this.setStatus((error as Error).message, 'error'); }
@@ -724,7 +732,7 @@ export class SportsBoardEditor extends EventTarget {
       this.selectedId = null;
       this.updateSelection();
       const surface = this.board.getDocument().surface.type;
-      this.applySurfaceRatio(surface);
+      this.applySurfaceRatio();
       this.renderSurfaceButtons(surface);
       this.populateNotes();
       this.notesHistoryOpen = false;
@@ -768,8 +776,8 @@ export class SportsBoardEditor extends EventTarget {
     this.query<HTMLButtonElement>('[data-action="notes"]').dataset.hasNotes = String(hasNotes);
   }
 
-  private applySurfaceRatio(surface: string): void {
-    this.root.style.setProperty('--sb-surface-ratio', String(this.board.registry.getSurface(surface).ratio));
+  private applySurfaceRatio(): void {
+    this.root.style.setProperty('--sb-surface-ratio', String(this.board.getSurfaceRatio()));
   }
 
   private save(): void {

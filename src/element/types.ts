@@ -1,4 +1,4 @@
-import type { BoardDocument, BoardImageOptions } from '../core/index.js';
+import type { BoardDocument, BoardImageOptions, OrientationPreference } from '../core/index.js';
 import type { EditorColorOption, EditorMessages } from '../editor/types.js';
 import type { BasketballMessages } from '../sports/basketball/i18n.js';
 import type { FootballMessages } from '../sports/football/i18n.js';
@@ -13,6 +13,8 @@ export interface SportsBoardElementOptions {
   locale?: SportsBoardLocale;
   data?: BoardDocument | string;
   surface?: string;
+  /** 'auto' follows the host box shape; explicit values lock the rendering. */
+  orientation?: OrientationPreference;
   sportMessages?: SportsBoardSportMessages;
 }
 

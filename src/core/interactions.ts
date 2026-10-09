@@ -1,6 +1,34 @@
+import type { SurfaceDefinition, SurfaceOrientation } from './types.js';
+import { surfaceVariant } from './registry.js';
+
 export interface WheelModifiers {
   ctrlKey: boolean;
   metaKey: boolean;
+}
+
+/** Switching orientations must improve the fit by this factor, so near-square hosts cannot flap. */
+export const ORIENTATION_SWITCH_MARGIN = 1.12;
+
+/**
+ * Chooses the orientation whose stage covers the largest area inside the host box.
+ * Near-equal fits keep the current orientation so resizing cannot flip back and forth.
+ * Surfaces without a portrait variant always stay landscape.
+ */
+export function pickSurfaceOrientation(
+  definition: SurfaceDefinition,
+  box: { width: number; height: number },
+  current: SurfaceOrientation
+): SurfaceOrientation {
+  if (!definition.portrait) return 'landscape';
+  const stageArea = (ratio: number): number => {
+    const stageWidth = Math.min(box.width, box.height * ratio);
+    return stageWidth * stageWidth / ratio;
+  };
+  const landscapeArea = stageArea(definition.ratio);
+  const portraitArea = stageArea(surfaceVariant(definition, 'portrait').ratio);
+  if (portraitArea > landscapeArea * ORIENTATION_SWITCH_MARGIN) return 'portrait';
+  if (landscapeArea > portraitArea * ORIENTATION_SWITCH_MARGIN) return 'landscape';
+  return current;
 }
 
 export interface TransformerBox {

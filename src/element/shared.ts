@@ -1,4 +1,4 @@
-import type { BoardDocument } from '../core/index.js';
+import type { BoardDocument, OrientationPreference } from '../core/index.js';
 import type { SportsBoardLocale } from '../viewer/types.js';
 import type { BuiltInSport, SportsBoardElementOptions } from './types.js';
 
@@ -32,6 +32,25 @@ export function resolveIdentity(element: HTMLElement, options: SportsBoardElemen
   if (sport !== 'basketball' && sport !== 'football' && sport !== 'volleyball') throw new Error(`Unknown SportsBoard sport '${sport}'`);
   if (locale !== 'en' && locale !== 'fr') throw new Error(`Unknown SportsBoard locale '${locale}'`);
   return { sport, locale, surface: element.getAttribute('surface') ?? options.surface };
+}
+
+/** Runtime guard for orientation values that may arrive untyped from JSON options. */
+export function isOrientationPreference(value: unknown): value is OrientationPreference {
+  return value === 'auto' || value === 'landscape' || value === 'portrait';
+}
+
+/** Reads the orientation attribute: absent means 'auto', anything else must name a preference. */
+export function resolveOrientationPreference(element: HTMLElement): OrientationPreference {
+  const value = element.getAttribute('orientation');
+  if (value === null || isOrientationPreference(value)) return value ?? 'auto';
+  throw new Error(`Unknown SportsBoard orientation '${value}'`);
+}
+
+/** Throws for option-property values the attribute path would reject as well. */
+export function assertOrientationPreference(value: unknown): void {
+  if (value !== undefined && !isOrientationPreference(value)) {
+    throw new Error(`Unknown SportsBoard orientation '${String(value)}'`);
+  }
 }
 
 export function resolveElementData(

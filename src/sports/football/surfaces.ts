@@ -171,6 +171,7 @@ export function registerFootballSurfaces(registry: Registry): void {
   });
   registry.registerSurface('football.fullpitch', {
     ratio: (PITCH_LENGTH + PITCH_RUNOFF * 2) / (PITCH_WIDTH + PITCH_RUNOFF * 2),
-    render: renderFullPitch
+    render: renderFullPitch,
+    portrait: true
   });
 }

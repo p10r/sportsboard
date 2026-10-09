@@ -62,9 +62,11 @@ export class SportsBoardViewer extends EventTarget {
       interactive: this.options.interactive,
       locale: this.options.locale,
       messages: this.options.messages,
+      orientation: this.options.orientation,
       registry: this.options.sport.createRegistry()
     });
     canvas.addEventListener('viewportchange', event => this.dispatchEvent(new CustomEvent('viewportchange', { detail: (event as CustomEvent).detail })));
+    canvas.addEventListener('orientationchange', event => this.dispatchEvent(new CustomEvent('orientationchange', { detail: (event as CustomEvent).detail })));
     return canvas;
   }
 

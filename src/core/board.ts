@@ -1,12 +1,12 @@
 import Konva from 'konva';
 import { History } from './history.js';
-import { constrainTransformerBox, requestsWheelZoom } from './interactions.js';
-import { Registry } from './registry.js';
+import { constrainTransformerBox, pickSurfaceOrientation, requestsWheelZoom } from './interactions.js';
+import { Registry, surfaceVariant } from './registry.js';
 import { isElementEndpoint, registerBuiltins } from './builtins.js';
 import { detachElementReferences } from './references.js';
 import { MODE_PRESETS } from './types.js';
 import { validateBoardDocument } from './validation.js';
-import type { BoardChangeDetail, BoardDocument, BoardElement, BoardElementActivateDetail, BoardImageOptions, BoardMode, BoardModeDetail, BoardMutationOptions, BoardOptions, BoardPermissions, BoardUIState, BoardViewportDetail, ElementInput, Endpoint, PermissionOverrides, Point } from './types.js';
+import type { BoardChangeDetail, BoardDocument, BoardElement, BoardElementActivateDetail, BoardImageOptions, BoardMode, BoardModeDetail, BoardMutationOptions, BoardOrientationDetail, BoardOptions, BoardPermissions, BoardUIState, BoardViewportDetail, ElementInput, Endpoint, OrientationPreference, PermissionOverrides, Point, SurfaceOrientation } from './types.js';
 
 const clone = <T>(value: T): T => structuredClone(value);
 const id = (): string => globalThis.crypto?.randomUUID?.() ?? `sb-${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -42,6 +42,7 @@ export class SportsBoard extends EventTarget {
   private history = new History();
   private magnetCandidateById = new Map<string, { element: string; anchor: Point }>();
   private document: BoardDocument;
+  private orientation: SurfaceOrientation = 'landscape';
   private ui: BoardUIState = { selectedIds: [], zoom: 1, pan: { x: 0, y: 0 } };
   private elementById = new Map<string, BoardElement>();
   private nodeById = new Map<string, Konva.Node>();
@@ -76,7 +77,10 @@ export class SportsBoard extends EventTarget {
     const initial: unknown = parsed ?? emptyDocument(options.surface ?? 'basketball.halfcourt');
     validateBoardDocument(initial, this.registry);
     this.document = clone(initial);
-    this.stage = new Konva.Stage({ container: container as HTMLDivElement, width: options.width ?? (container.clientWidth || 800), height: options.height ?? (container.clientHeight || 600) });
+    this.orientation = this.resolveOrientation();
+    const initialRatio = this.activeSurfaceRatio();
+    const initialWidth = options.width ?? (container.clientWidth || 800);
+    this.stage = new Konva.Stage({ container: container as HTMLDivElement, width: initialWidth, height: options.height ?? (container.clientHeight || initialWidth / initialRatio) });
     if (this.interactive) this.stage.container().style.touchAction = 'none';
     this.stage.add(this.backgroundLayer, this.annotationLayer, this.connectorLayer, this.contentLayer, this.uiLayer);
     this.uiLayer.add(this.connectorHandles, this.transformer);
@@ -91,6 +95,7 @@ export class SportsBoard extends EventTarget {
     if (!options.width || !options.height) {
       this.resizeObserver = new ResizeObserver(() => this.scheduleResize());
       this.resizeObserver.observe(container);
+      if (options.orientationSource && options.orientationSource !== container) this.resizeObserver.observe(options.orientationSource);
     }
     this.render();
   }
@@ -106,6 +111,15 @@ export class SportsBoard extends EventTarget {
   setPermissions(overrides: PermissionOverrides): void { this.overrides = { ...overrides }; this.setMode(this.mode, this.overrides); }
   getDocument(): BoardDocument { return clone(this.document); }
   getUIState(): Readonly<BoardUIState> { return clone(this.ui); }
+  /** Orientation currently rendered: the authored landscape view or its rotated variant. */
+  getOrientation(): SurfaceOrientation { return this.orientation; }
+  /** Aspect ratio of the active surface variant, for hosts that mirror the layout in CSS. */
+  getSurfaceRatio(): number { return this.activeSurfaceRatio(); }
+  /** Replaces the orientation preference and re-renders when the active orientation changes. */
+  setOrientationPreference(preference: OrientationPreference): void {
+    this.options = { ...this.options, orientation: preference };
+    this.resize();
+  }
   setZoom(zoom: number, anchor: Point = { x: this.stage.width() / 2, y: this.stage.height() / 2 }): number {
     const nextZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom));
     const boardPoint = this.viewportToBoard(anchor);
@@ -128,7 +142,7 @@ export class SportsBoard extends EventTarget {
   clientToBoardPoint(clientX: number, clientY: number): Point {
     const rect = this.stage.container().getBoundingClientRect();
     const point = this.viewportToBoard({ x: clientX - rect.left, y: clientY - rect.top });
-    return clampPoint({ x: point.x / this.stage.width(), y: point.y / this.stage.height() });
+    return clampPoint(this.stageToNormalized(point));
   }
   toJSON(pretty = false): string { return JSON.stringify(this.document, null, pretty ? 2 : undefined); }
   toCanvas(options: BoardImageOptions = {}): HTMLCanvasElement {
@@ -327,22 +341,100 @@ export class SportsBoard extends EventTarget {
   }
 
   private resize(): void {
-    const width = this.options.width ?? this.container.clientWidth;
-    const surface = this.registry.getSurface(this.document.surface.type);
-    const height = this.options.height ?? width / surface.ratio;
-    if (width <= 0 || height <= 0 || (width === this.stage.width() && height === this.stage.height())) return;
+    const box = this.orientationBox();
+    const orientation = this.resolveOrientation();
+    const ratio = this.activeSurfaceRatio(orientation);
+    // A caller-supplied width is clamped to the available height so a portrait
+    // stage cannot overflow its host; hosts without explicit dimensions keep
+    // their CSS-driven, width-first sizing.
+    const width = this.options.width !== undefined && this.options.height === undefined && box.height > 0
+      ? Math.min(this.options.width, box.height * ratio)
+      : this.options.width ?? this.container.clientWidth;
+    const height = this.options.height ?? width / ratio;
+    if (width <= 0 || height <= 0 || (width === this.stage.width() && height === this.stage.height() && orientation === this.orientation)) return;
+    const changed = orientation !== this.orientation;
+    this.orientation = orientation;
     this.stage.size({ width, height });
-    this.clampPan();
+    if (changed) { this.ui.zoom = MIN_ZOOM; this.ui.pan = { x: 0, y: 0 }; this.applyViewport(); }
+    else this.clampPan();
     this.render();
+    if (changed) this.dispatchEvent(new CustomEvent<BoardOrientationDetail>('orientationchange', { detail: { orientation, ratio } }));
+  }
+
+  /** The box the automatic orientation tries to fit: explicit dimensions, else the source element. */
+  private orientationBox(): { width: number; height: number } {
+    if (this.options.width && this.options.height) return { width: this.options.width, height: this.options.height };
+    const source = this.options.orientationSource ?? this.container;
+    return { width: this.options.width ?? source.clientWidth, height: this.options.height ?? source.clientHeight };
+  }
+
+  /**
+   * Resolves the orientation to render: a locked preference wins; 'auto' picks the
+   * variant that fits the host box, keeping the current one on near-equal fits.
+   */
+  private resolveOrientation(): SurfaceOrientation {
+    const preference = this.options.orientation ?? 'auto';
+    const definition = this.registry.getSurface(this.document.surface.type);
+    if (preference === 'landscape') return 'landscape';
+    if (preference === 'portrait') return definition.portrait ? 'portrait' : 'landscape';
+    const box = this.orientationBox();
+    if (box.width <= 0 || box.height <= 0) return this.orientation;
+    return pickSurfaceOrientation(definition, box, this.orientation);
+  }
+
+  private activeSurfaceRatio(orientation: SurfaceOrientation = this.orientation): number {
+    return surfaceVariant(this.registry.getSurface(this.document.surface.type), orientation).ratio;
+  }
+
+  /** Stage size mapped onto the surface's authored axes; identical to the stage box in landscape. */
+  private canonicalSize(): { width: number; height: number } {
+    return this.orientation === 'portrait'
+      ? { width: this.stage.height(), height: this.stage.width() }
+      : { width: this.stage.width(), height: this.stage.height() };
+  }
+
+  /** Scene layers render in canonical space and rotate onto the stage in portrait. */
+  private applySceneTransforms(canonical: { width: number; height: number }): void {
+    for (const layer of [this.backgroundLayer, this.annotationLayer, this.connectorLayer, this.contentLayer]) {
+      layer.setAttrs(this.orientation === 'portrait'
+        ? { rotation: -90, x: 0, y: canonical.width }
+        : { rotation: 0, x: 0, y: 0 });
+    }
+  }
+
+  /** Stage pixels to canonical pixels: the inverse of the scene layer rotation. */
+  private stageToCanon(point: Point): Point {
+    if (this.orientation !== 'portrait') return point;
+    return { x: this.stage.height() - point.y, y: point.x };
+  }
+
+  /** Canonical pixels to stage pixels: forwards through the scene layer rotation. */
+  private canonToStage(point: Point): Point {
+    if (this.orientation !== 'portrait') return point;
+    return { x: point.y, y: this.stage.height() - point.x };
+  }
+
+  /** Normalized canonical coordinates to stage pixels, for handles that live in screen space. */
+  private normalizedToStage(point: Point): Point {
+    const canonical = this.canonicalSize();
+    return this.canonToStage({ x: point.x * canonical.width, y: point.y * canonical.height });
+  }
+
+  /** Stage pixels to normalized canonical coordinates, for every pointer write-back. */
+  private stageToNormalized(point: Point): Point {
+    const canonical = this.canonicalSize();
+    const canonicalPoint = this.stageToCanon(point);
+    return { x: canonicalPoint.x / canonical.width, y: canonicalPoint.y / canonical.height };
   }
   private render(): void {
     if (this.connectorRenderFrame !== undefined) { cancelAnimationFrame(this.connectorRenderFrame); this.connectorRenderFrame = undefined; }
     this.dirtyConnectorIds = new Set();
-    const width = this.stage.width(), height = this.stage.height();
+    const canonical = this.canonicalSize();
+    this.applySceneTransforms(canonical);
     this.backgroundLayer.destroyChildren(); this.annotationLayer.destroyChildren(); this.connectorLayer.destroyChildren(); this.contentLayer.destroyChildren(); this.nodeById.clear(); this.connectionRectById.clear();
     this.elementById = new Map(this.document.elements.map(element => [element.id, element]));
     const surface = this.registry.getSurface(this.document.surface.type);
-    const renderedSurface = surface.render(width, height, this.document.surface.data);
+    const renderedSurface = surfaceVariant(surface, this.orientation).render(canonical.width, canonical.height, this.document.surface.data);
     renderedSurface.listening(false);
     this.backgroundLayer.add(renderedSurface);
     const context = this.renderContext();
@@ -356,15 +448,16 @@ export class SportsBoard extends EventTarget {
         node.on('pointerdown', event => { if (this.mode === 'viewer') return; event.cancelBubble = true; if (this.permissions.select) this.select(element.id); });
         node.on('dblclick dbltap', event => { event.cancelBubble = true; this.activateElement(element.id); });
         let beforeDrag: BoardDocument | undefined;
+        let startRotation = 0;
         node.on('dragstart', () => { beforeDrag = clone(this.document); this.magnetCandidateById.delete(element.id); });
         node.on('dragmove', () => { this.applySnap(node); this.applyMagnet(node, element); this.scheduleConnectorRender(element.id); });
         node.on('dragend', () => {
           if (!this.permissions.move) return;
           if (beforeDrag) this.history.push(beforeDrag);
           const current = this.document.elements[this.indexOf(element.id)];
-          const absolute = this.viewportToBoard(node.absolutePosition());
-          current.x = absolute.x / width;
-          current.y = absolute.y / height;
+          const position = this.stageToNormalized(this.viewportToBoard(node.absolutePosition()));
+          current.x = position.x;
+          current.y = position.y;
           if (definition.magnet) {
             const candidate = this.magnetCandidateById.get(element.id);
             if (candidate) current.attachment = clone(candidate);
@@ -373,14 +466,18 @@ export class SportsBoard extends EventTarget {
           }
           this.render(); this.select(element.id); this.emitChange();
         });
-        node.on('transformstart', () => { beforeDrag = clone(this.document); });
+        node.on('transformstart', () => { beforeDrag = clone(this.document); startRotation = node.rotation(); });
         node.on('transform', () => { this.keepLabelsUpright(node); this.scheduleConnectorRender(element.id); });
         node.on('transformend', () => {
           const resize = definition.resize;
           if (!this.permissions.rotate && (!resize || !this.permissions.editProperties)) return;
           if (beforeDrag) this.history.push(beforeDrag);
           const current = this.document.elements[this.indexOf(element.id)];
-          if (this.permissions.rotate) current.rotation = node.rotation();
+          // Store the gesture delta, not the rendered rotation: elements that
+          // counter-rotate in portrait render at 90 + element.rotation, so a
+          // raw node.rotation() write-back would accumulate that offset into
+          // the document on every gesture.
+          if (this.permissions.rotate) current.rotation = (current.rotation ?? 0) + (node.rotation() - startRotation);
           if (resize && this.permissions.editProperties) {
             const defaultWidth = typeof definition.defaults?.width === 'number' ? definition.defaults.width : .1;
             const defaultHeight = typeof definition.defaults?.height === 'number' ? definition.defaults.height : .1;
@@ -388,8 +485,7 @@ export class SportsBoard extends EventTarget {
             const baseHeight = current.height ?? defaultHeight;
             current.width = Math.max(resize.minWidth, Math.min(resize.maxWidth, baseWidth * Math.abs(node.scaleX())));
             current.height = Math.max(resize.minHeight, Math.min(resize.maxHeight, baseHeight * Math.abs(node.scaleY())));
-            const absolute = this.viewportToBoard(node.absolutePosition());
-            const position = clampPoint({ x: absolute.x / width, y: absolute.y / height });
+            const position = clampPoint(this.stageToNormalized(this.viewportToBoard(node.absolutePosition())));
             current.x = position.x;
             current.y = position.y;
           }
@@ -406,16 +502,22 @@ export class SportsBoard extends EventTarget {
       this.connectionRectById.set(element.id, node.getClientRect({ skipTransform: true, skipShadow: true, skipStroke: true }));
       if (definition.transformable === false) renderedNode.moveToBottom();
     }
-    this.mountAttachments(width, height);
+    this.mountAttachments();
     this.nodeById.forEach(node => this.keepLabelsUpright(node));
     this.renderConnectors();
     this.syncTransformer(); this.stage.batchDraw();
   }
-  private renderContext(): { width: number; height: number; resolveEndpoint: (endpoint: Endpoint, toward?: Point, margin?: number) => Point } {
+  private renderContext() {
+    const canonical = this.canonicalSize();
     return {
-      width: this.stage.width(),
-      height: this.stage.height(),
-      resolveEndpoint: (endpoint, toward, margin) => this.resolveEndpoint(endpoint, toward, margin)
+      width: canonical.width,
+      height: canonical.height,
+      orientation: this.orientation,
+      stageWidth: this.stage.width(),
+      stageHeight: this.stage.height(),
+      toStagePoint: (point: Point) => this.canonToStage(point),
+      toCanonPoint: (point: Point) => this.stageToCanon(point),
+      resolveEndpoint: (endpoint: Endpoint, toward?: Point, margin?: number) => this.resolveEndpoint(endpoint, toward, margin)
     };
   }
 
@@ -482,10 +584,11 @@ export class SportsBoard extends EventTarget {
     const localCenter = { x: localRect.x + localRect.width / 2, y: localRect.y + localRect.height / 2 };
     const transform = node.getAbsoluteTransform();
     const center = this.viewportToBoard(transform.point(localCenter));
-    const normalizedCenter = { x: center.x / this.stage.width(), y: center.y / this.stage.height() };
+    const normalizedCenter = this.stageToNormalized(center);
     if (!toward || localRect.width <= 0 || localRect.height <= 0) return normalizedCenter;
 
-    const target = { x: toward.x * this.stage.width(), y: toward.y * this.stage.height() };
+    const canonical = this.canonicalSize();
+    const target = this.normalizedToStage(toward);
     const localTarget = transform.copy().invert().point(this.boardToViewport(target));
     const dx = localTarget.x - localCenter.x;
     const dy = localTarget.y - localCenter.y;
@@ -497,16 +600,19 @@ export class SportsBoard extends EventTarget {
     const scale = boundary?.shape === 'rectangle'
       ? 1 / Math.max(Math.abs(dx) / radiusX, Math.abs(dy) / radiusY)
       : 1 / Math.sqrt((dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY));
-    const edge = this.viewportToBoard(transform.point({ x: localCenter.x + dx * scale, y: localCenter.y + dy * scale }));
+    const edgeBoard = this.viewportToBoard(transform.point({ x: localCenter.x + dx * scale, y: localCenter.y + dy * scale }));
     const worldDx = target.x - center.x;
     const worldDy = target.y - center.y;
     const worldDistance = Math.hypot(worldDx, worldDy);
-    const requestedMargin = (margin ?? boundary?.margin ?? .007) * this.stage.width();
+    const requestedMargin = (margin ?? boundary?.margin ?? .007) * canonical.width;
     const safeMargin = Math.min(requestedMargin, worldDistance * .2);
-    return {
-      x: (edge.x + worldDx / worldDistance * safeMargin) / this.stage.width(),
-      y: (edge.y + worldDy / worldDistance * safeMargin) / this.stage.height()
-    };
+    // The margin travels along the connector direction in stage space and is
+    // normalized in one step; dividing the axes separately would skew the gap
+    // in portrait, where stage and canonical axes are rotated against each other.
+    return this.stageToNormalized({
+      x: edgeBoard.x + worldDx / worldDistance * safeMargin,
+      y: edgeBoard.y + worldDy / worldDistance * safeMargin
+    });
   }
   private connectorEndpointPosition(element: BoardElement, key: 'from' | 'to'): Point {
     const endpoint = element[key] ?? { x: element.x ?? 0, y: element.y ?? 0 };
@@ -517,13 +623,14 @@ export class SportsBoard extends EventTarget {
     return this.resolveEndpoint(endpoint, opposite);
   }
   private endpointMagnet(point: Point, connectorId: string): { endpoint: Endpoint; point: Point } | undefined {
-    const threshold = (this.options.snap?.threshold ?? .065) * this.stage.width();
+    const canonical = this.canonicalSize();
+    const threshold = (this.options.snap?.threshold ?? .065) * canonical.width;
     let closest: { endpoint: Endpoint; point: Point; distance: number } | undefined;
     for (const candidate of this.document.elements) {
       const definition = this.registry.getElement(candidate.type);
       if (candidate.id === connectorId || definition.layer === 'connectors' || definition.connectable === false) continue;
       const center = this.resolveEndpoint({ element: candidate.id });
-      const distance = Math.hypot((point.x - center.x) * this.stage.width(), (point.y - center.y) * this.stage.height());
+      const distance = Math.hypot((point.x - center.x) * canonical.width, (point.y - center.y) * canonical.height);
       if (!closest || distance < closest.distance) closest = { endpoint: { element: candidate.id }, point: center, distance };
     }
     return closest && closest.distance <= threshold ? closest : undefined;
@@ -535,12 +642,12 @@ export class SportsBoard extends EventTarget {
 
     const addEndpointHandle = (key: 'from' | 'to'): void => {
       const endpoint = element[key] ?? { x: element.x ?? 0, y: element.y ?? 0 };
-      const position = this.connectorEndpointPosition(element, key);
+      const position = this.normalizedToStage(this.connectorEndpointPosition(element, key));
       const handle = new Konva.Circle({
         name: 'sportsboard-connector-endpoint',
         endpointKey: key,
-        x: position.x * this.stage.width(),
-        y: position.y * this.stage.height(),
+        x: position.x,
+        y: position.y,
         radius: coarsePointer ? 11 : 9,
         fill: isElementEndpoint(endpoint) ? '#10b981' : '#2563eb',
         stroke: '#ffffff',
@@ -560,11 +667,11 @@ export class SportsBoard extends EventTarget {
       handle.on('dragmove', () => {
         const current = this.elementById.get(element.id);
         if (!current) return;
-        const point = clampPoint({ x: handle.x() / this.stage.width(), y: handle.y() / this.stage.height() });
+        const point = clampPoint(this.stageToNormalized({ x: handle.x(), y: handle.y() }));
         candidate = this.endpointMagnet(point, element.id);
         current[key] = candidate?.endpoint ?? point;
         const visual = candidate ? this.connectorEndpointPosition(current, key) : point;
-        handle.position({ x: visual.x * this.stage.width(), y: visual.y * this.stage.height() });
+        handle.position(this.normalizedToStage(visual));
         handle.fill(candidate ? '#10b981' : '#2563eb');
         handle.stroke('#ffffff');
         this.scheduleConnectorRender(element.id);
@@ -580,11 +687,12 @@ export class SportsBoard extends EventTarget {
     addEndpointHandle('from');
     addEndpointHandle('to');
     element.waypoints?.forEach((waypoint, index) => {
+      const waypointPosition = this.normalizedToStage(waypoint);
       const handle = new Konva.Circle({
         name: 'sportsboard-connector-waypoint',
         waypointIndex: index,
-        x: waypoint.x * this.stage.width(),
-        y: waypoint.y * this.stage.height(),
+        x: waypointPosition.x,
+        y: waypointPosition.y,
         radius: coarsePointer ? 10 : 8,
         fill: '#ffffff',
         stroke: '#2563eb',
@@ -603,9 +711,8 @@ export class SportsBoard extends EventTarget {
       handle.on('dragmove', () => {
         const current = this.elementById.get(element.id);
         if (!current?.waypoints?.[index]) return;
-        current.waypoints[index] = clampPoint({ x: handle.x() / this.stage.width(), y: handle.y() / this.stage.height() });
-        const clamped = current.waypoints[index];
-        handle.position({ x: clamped.x * this.stage.width(), y: clamped.y * this.stage.height() });
+        current.waypoints[index] = clampPoint(this.stageToNormalized({ x: handle.x(), y: handle.y() }));
+        handle.position(this.normalizedToStage(current.waypoints[index]));
         this.scheduleConnectorRender(element.id);
       });
       handle.on('dragend', () => {
@@ -632,15 +739,14 @@ export class SportsBoard extends EventTarget {
       const endpointKey = handle.getAttr('endpointKey') as 'from' | 'to' | undefined;
       if (endpointKey) {
         const endpoint = element[endpointKey] ?? { x: element.x ?? 0, y: element.y ?? 0 };
-        const position = this.connectorEndpointPosition(element, endpointKey);
-        handle.position({ x: position.x * this.stage.width(), y: position.y * this.stage.height() });
+        handle.position(this.normalizedToStage(this.connectorEndpointPosition(element, endpointKey)));
         handle.fill(isElementEndpoint(endpoint) ? '#10b981' : '#2563eb');
         return;
       }
 
       const waypointIndex = handle.getAttr('waypointIndex') as number | undefined;
       const waypoint = waypointIndex === undefined ? undefined : element.waypoints?.[waypointIndex];
-      if (waypoint) handle.position({ x: waypoint.x * this.stage.width(), y: waypoint.y * this.stage.height() });
+      if (waypoint) handle.position(this.normalizedToStage(waypoint));
     });
     this.uiLayer.batchDraw();
   }
@@ -650,6 +756,11 @@ export class SportsBoard extends EventTarget {
     const definition = element ? this.registry.getElement(element.type) : undefined;
     const transformable = definition?.transformable !== false;
     const resize = definition?.resize;
+    // In portrait the node's screen box swaps axes, so the bounds and the stage
+    // dimensions they compare against must swap with them.
+    const bounds = resize && this.orientation === 'portrait'
+      ? { minWidth: resize.minHeight, minHeight: resize.minWidth, maxWidth: resize.maxHeight, maxHeight: resize.maxWidth }
+      : resize;
     this.transformer.nodes(node && this.permissions.select && transformable ? [node] : []);
     this.transformer.resizeEnabled(Boolean(resize) && this.permissions.editProperties);
     this.transformer.enabledAnchors(resize ? ['top-left', 'top-center', 'top-right', 'middle-right', 'bottom-right', 'bottom-center', 'bottom-left', 'middle-left'] : []);
@@ -658,7 +769,7 @@ export class SportsBoard extends EventTarget {
     this.transformer.boundBoxFunc((oldBox, nextBox) => constrainTransformerBox(
       oldBox,
       nextBox,
-      resize,
+      bounds,
       this.stage.width(),
       this.stage.height(),
       this.ui.zoom
@@ -670,9 +781,10 @@ export class SportsBoard extends EventTarget {
   private applySnap(node: Konva.Node): void {
     const grid = this.options.snap?.grid;
     if (!grid) return;
-    const position = this.viewportToBoard(node.absolutePosition());
-    const x = position.x / this.stage.width(), y = position.y / this.stage.height();
-    node.absolutePosition(this.boardToViewport({ x: Math.round(x / grid) * grid * this.stage.width(), y: Math.round(y / grid) * grid * this.stage.height() }));
+    const canonical = this.canonicalSize();
+    const position = this.stageToNormalized(this.viewportToBoard(node.absolutePosition()));
+    const snapped = { x: Math.round(position.x / grid) * grid, y: Math.round(position.y / grid) * grid };
+    node.absolutePosition(this.boardToViewport(this.canonToStage({ x: snapped.x * canonical.width, y: snapped.y * canonical.height })));
   }
 
   private keepLabelsUpright(node: Konva.Node): void {
@@ -685,7 +797,7 @@ export class SportsBoard extends EventTarget {
     const magnet = this.registry.getElement(element.type).magnet;
     if (!magnet || this.options.snap?.elements === false) return;
     const source = this.viewportToBoard(node.absolutePosition());
-    const threshold = (magnet.threshold ?? .075) * this.stage.width();
+    const threshold = (magnet.threshold ?? .075) * this.canonicalSize().width;
     const anchors = magnet.anchors ?? [{ x: .08, y: .28 }, { x: .92, y: .28 }];
     let closest: { element: string; anchor: Point; position: Point; distance: number } | undefined;
     for (const target of this.document.elements) {
@@ -704,7 +816,7 @@ export class SportsBoard extends EventTarget {
     } else this.magnetCandidateById.delete(element.id);
   }
 
-  private mountAttachments(width: number, height: number): void {
+  private mountAttachments(): void {
     for (const element of this.document.elements) {
       if (!element.attachment) continue;
       const node = this.nodeById.get(element.id);
@@ -712,9 +824,9 @@ export class SportsBoard extends EventTarget {
       if (!node || !target || node === target) { delete element.attachment; continue; }
       node.moveTo(target as Konva.Container);
       node.position({ x: target.width() * element.attachment.anchor.x, y: target.height() * element.attachment.anchor.y });
-      const absolute = this.viewportToBoard(node.absolutePosition());
-      element.x = absolute.x / width;
-      element.y = absolute.y / height;
+      const absolute = this.stageToNormalized(this.viewportToBoard(node.absolutePosition()));
+      element.x = absolute.x;
+      element.y = absolute.y;
     }
   }
 

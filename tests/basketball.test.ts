@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import Konva from 'konva';
-import { validateBoardDocument, type BoardDocument, type SportsBoard } from '../src/core/index.js';
+import { surfaceVariant, validateBoardDocument, type BoardDocument, type SportsBoard } from '../src/core/index.js';
 import { Basketball, createBasketballViewer } from '../src/sports/basketball/viewer-entry.js';
 import { createBasketballEditor } from '../src/sports/basketball/editor.js';
 import { attachToSelectedMagnetTarget } from '../src/editor/change.js';
@@ -25,6 +25,14 @@ describe('basketball equipment', () => {
     expect(basket.connectable).toBe(false);
     expect(basket.defaults?.width).toBe(.14);
     expect(basket.defaults?.height).toBe(.075);
+  });
+
+  it('opts only the full court into the rotated portrait rendering', () => {
+    const registry = createBasketballViewer().createRegistry();
+    expect(registry.getSurface(Basketball.surfaces.halfCourt).portrait).toBeUndefined();
+    const full = registry.getSurface(Basketball.surfaces.fullCourt);
+    expect(full.portrait).toBe(true);
+    expect(surfaceVariant(full, 'portrait').ratio).toBeCloseTo(1 / full.ratio);
   });
 
   it('allows movements and the ball to attach to a coach', () => {

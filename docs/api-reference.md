@@ -15,6 +15,22 @@ The import registers:
 
 Both elements are responsive hosts with `width: 100%` and `height: 100%`. The editor uses size container queries, so its compact tablet/mobile interface follows the space allocated by the application instead of the full browser viewport. Editor and viewer fields preserve the active surface ratio while fitting the available height; the editor keeps a protected minimum, and its tools and inspector scroll independently. They use the light DOM, so application CSS classes apply normally.
 
+## Responsive orientation
+
+Full-court surfaces render in two orientations. Wide hosts show the authored landscape view; tall hosts — phones in portrait — automatically rotate the field by 90 degrees so the length of the court follows the length of the screen, matching the familiar half-court angle. The flip is a pure rendering concern:
+
+- Element positions in a document always refer to the authored landscape axes, so a diagram drafted on a desktop opens unchanged on a phone and vice versa.
+- Resizing the host never mutates the document; near-square hosts keep their current orientation instead of flipping back and forth.
+- The surface switcher still shows one button per surface; the orientation is not a user choice.
+
+Surfaces opt in per registration, so half courts and half pitches keep their authored layout. The attribute locks the rendering for applications that want predictable output:
+
+```html
+<sports-board-viewer sport="volleyball" orientation="portrait"></sports-board-viewer>
+```
+
+`orientation` accepts `auto` (default), `landscape`, or `portrait`; a locked portrait request on a surface without a rotated variant falls back to landscape. Image exports follow the on-screen orientation, so a phone user shares a portrait image and a desktop user a landscape one. The offscreen thumbnail helpers accept an explicit `orientation` because they render without a live host.
+
 Focused imports and imperative integrations are covered in [Alternative integration methods](alternative-integrations.md).
 
 ## `<sports-board-editor>`
@@ -35,6 +51,7 @@ Focused imports and imperative integrations are covered in [Alternative integrat
 | `sport` | `basketball`, `football`, `volleyball` | Selects the single sport owned by this instance |
 | `locale` | `en`, `fr` | Selects built-in interface and sport wording |
 | `surface` | surface ID | Selects the empty document's initial surface |
+| `orientation` | `auto`, `landscape`, `portrait` | Locks the rendering orientation; `auto` follows the host shape |
 | `show-save` | boolean attribute | Shows or hides the built-in Save button |
 | `data` | JSON string | Supplies a document when an attribute is appropriate; removing it remounts the default/fallback document |
 | `options` | JSON object | Supplies serializable options from markup |
@@ -87,6 +104,7 @@ Markup attributes take precedence over matching property options. The element re
 | `sport` | `basketball`, `football`, `volleyball` | Selects the document registry |
 | `locale` | `en`, `fr` | Selects navigation wording |
 | `surface` | surface ID | Selects the empty document's initial surface |
+| `orientation` | `auto`, `landscape`, `portrait` | Locks the rendering orientation; `auto` follows the host shape |
 | `controls` | boolean attribute | Shows zoom and reset controls |
 | `interactive` | boolean attribute | Enables Cmd/Ctrl + wheel zoom, pinch, pan, and hit detection |
 | `data` | JSON string | Supplies a document |
@@ -113,7 +131,7 @@ The editor and viewer expose the same document and image API.
 
 Image options accept `width`, `pixelRatio`, `type`, and `quality`. A supplied output width preserves the surface ratio.
 
-The viewer additionally exposes `getBoard()` for advanced integrations. The editor keeps its lower-level board available from `editor.instance?.getBoard()`.
+The viewer additionally exposes `getBoard()` for advanced integrations. The editor keeps its lower-level board available from `editor.instance?.getBoard()`. The returned board reports the active rendering with `getOrientation()` and `getSurfaceRatio()`, and `setOrientationPreference('auto' | 'landscape' | 'portrait')` re-resolves it on demand — the imperative counterpart of the `orientation` attribute.
 
 ## Events
 
@@ -140,6 +158,7 @@ viewer.addEventListener('viewportchange', ({ detail }) => {
 | `save` | editor | `{ document, json }` |
 | `status` | editor | `{ message, tone }` |
 | `viewportchange` | both | `{ zoom, pan }` |
+| `orientationchange` | both | `{ orientation, ratio }` — fired when a resize flips the active orientation |
 | `error` | both | `{ error }` |
 
 ## TypeScript
@@ -173,12 +192,13 @@ const blob = await renderSportsBoardThumbnail({
   data: savedDocument,
   sport: createBasketballViewer('en'),
   width: 640,
+  orientation: 'landscape',
   type: 'image/webp',
   quality: 0.85
 });
 ```
 
-`renderSportsBoardThumbnail()` returns a `Blob`. `renderSportsBoardThumbnailDataURL()` returns a data URL. Both create and destroy their temporary canvas automatically.
+`renderSportsBoardThumbnail()` returns a `Blob`. `renderSportsBoardThumbnailDataURL()` returns a data URL. Both create and destroy their temporary canvas automatically. `orientation` accepts `landscape` (default) or `portrait` and picks the matching variant of the document's surface.
 
 See [Saving diagrams and generating thumbnails](saving-and-thumbnails.md) for complete submit, upload, preview, Laravel, and multi-diagram flows.
 

@@ -23,6 +23,21 @@ export function registerFootballSurfaces(registry: Registry): Registry {
 
 Surface renderers receive pixel dimensions but documents keep normalized positions.
 
+Full-size surfaces can opt into the rotated portrait rendering used on tall hosts:
+
+```ts
+registry.registerSurface('football.fullpitch', {
+  ratio: 105 / 68,
+  render: renderFullPitch,
+  // Rotates the authored render by 90 degrees when the host is taller than wide.
+  portrait: true
+});
+```
+
+`portrait: true` derives the rotated variant automatically: the stage takes the inverse ratio and the same render function draws the field through a rotated layer, so element positions and sizes stay landscape-normalized in documents. Pass an explicit `{ ratio, render }` instead when the rotated view should look different; that render still draws in the authored (landscape) axes and the engine rotates it onto the portrait stage, so `ratio` must describe the rotated box — normally the inverse of the authored ratio. Hosts lock the orientation with the `orientation` attribute or board option.
+
+Element renderers can stay orientation-agnostic: `RenderContext` reports the authored-axis dimensions (`width`, `height`) plus the actual stage size (`stageWidth`, `stageHeight`), the active `orientation`, and `toStagePoint`/`toCanonPoint` converters. Annotations that must stay screen-readable when the field is rotated — text boxes, labels — use the stage dimensions for their box, anchor at the canonical position, and counter-rotate by +90 degrees, the way the built-in free text, markers, and movement labels do.
+
 ## Add an element
 
 ```ts
