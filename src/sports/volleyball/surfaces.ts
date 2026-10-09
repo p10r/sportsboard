@@ -179,6 +179,7 @@ export function registerVolleyballSurfaces(registry: Registry): void {
   });
   registry.registerSurface('volleyball.fullcourt', {
     ratio: (COURT_LENGTH + FREE_ZONE * 2) / (COURT_WIDTH + FREE_ZONE * 2),
-    render: renderFullCourt
+    render: renderFullCourt,
+    portrait: true
   });
 }
