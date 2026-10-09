@@ -3,6 +3,7 @@ import { SportsBoardEditor } from '../editor/index.js';
 import { mountElementStyles } from './styles.js';
 import { editorFactories } from './sports.js';
 import {
+  assertOrientationPreference,
   booleanAttribute,
   clone,
   copyOptions,
@@ -151,6 +152,7 @@ export class SportsBoardEditorElement extends HTMLElementBase {
 
   private bindInstance(instance: SportsBoardEditor): void {
     instance.addEventListener('viewportchange', event => emit(this, 'viewportchange', (event as CustomEvent).detail));
+    instance.addEventListener('orientationchange', event => emit(this, 'orientationchange', (event as CustomEvent).detail));
     instance.addEventListener('change', event => {
       const document = (event as CustomEvent<{ document: BoardDocument }>).detail.document;
       this.documentData = document;
@@ -169,11 +171,13 @@ export class SportsBoardEditorElement extends HTMLElementBase {
   private resolveOptions(): SportsBoardEditorElementOptions {
     const serialized = this.getAttribute('options');
     const attributeOptions = serialized ? parseJSON<SportsBoardEditorElementOptions>(serialized, 'options attribute') : {};
-    return {
+    const options = {
       ...attributeOptions,
       ...this.elementOptions,
       showSave: booleanAttribute(this, 'show-save') ?? this.elementOptions.showSave ?? attributeOptions.showSave
     };
+    assertOrientationPreference(options.orientation);
+    return options;
   }
 
   private scheduleMount(): void {

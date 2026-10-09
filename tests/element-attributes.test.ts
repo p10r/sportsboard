@@ -37,3 +37,30 @@ describe('custom element data attributes', () => {
     expect(errors[0]?.message).toContain('Invalid SportsBoard data attribute');
   });
 });
+
+describe('orientation option handling', () => {
+  const elementWithAttribute = (value: string | null) =>
+    ({ getAttribute: (name: string) => (name === 'orientation' ? value : null) }) as HTMLElement;
+
+  it('treats a missing orientation attribute as auto', async () => {
+    const { resolveOrientationPreference } = await import('../src/element/shared.js');
+    expect(resolveOrientationPreference(elementWithAttribute(null))).toBe('auto');
+  });
+
+  it.each(['auto', 'landscape', 'portrait'])('accepts the %s attribute', async value => {
+    const { resolveOrientationPreference } = await import('../src/element/shared.js');
+    expect(resolveOrientationPreference(elementWithAttribute(value))).toBe(value);
+  });
+
+  it('rejects unknown attribute values with the element error contract', async () => {
+    const { resolveOrientationPreference } = await import('../src/element/shared.js');
+    expect(() => resolveOrientationPreference(elementWithAttribute('diagonal'))).toThrow("Unknown SportsBoard orientation 'diagonal'");
+  });
+
+  it('validates option-property values the same way as the attribute', async () => {
+    const { assertOrientationPreference } = await import('../src/element/shared.js');
+    expect(() => assertOrientationPreference(undefined)).not.toThrow();
+    expect(() => assertOrientationPreference('portrait')).not.toThrow();
+    expect(() => assertOrientationPreference('diagonal')).toThrow("Unknown SportsBoard orientation 'diagonal'");
+  });
+});

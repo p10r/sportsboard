@@ -341,16 +341,22 @@ export class SportsBoard extends EventTarget {
   }
 
   private resize(): void {
-    const width = this.options.width ?? this.container.clientWidth;
+    const box = this.orientationBox();
     const orientation = this.resolveOrientation();
     const ratio = this.activeSurfaceRatio(orientation);
+    // A caller-supplied width is clamped to the available height so a portrait
+    // stage cannot overflow its host; hosts without explicit dimensions keep
+    // their CSS-driven, width-first sizing.
+    const width = this.options.width !== undefined && this.options.height === undefined && box.height > 0
+      ? Math.min(this.options.width, box.height * ratio)
+      : this.options.width ?? this.container.clientWidth;
     const height = this.options.height ?? width / ratio;
     if (width <= 0 || height <= 0 || (width === this.stage.width() && height === this.stage.height() && orientation === this.orientation)) return;
     const changed = orientation !== this.orientation;
     this.orientation = orientation;
     this.stage.size({ width, height });
-    if (changed) { this.ui.zoom = MIN_ZOOM; this.ui.pan = { x: 0, y: 0 }; }
-    this.applyViewport();
+    if (changed) { this.ui.zoom = MIN_ZOOM; this.ui.pan = { x: 0, y: 0 }; this.applyViewport(); }
+    else this.clampPan();
     this.render();
     if (changed) this.dispatchEvent(new CustomEvent<BoardOrientationDetail>('orientationchange', { detail: { orientation, ratio } }));
   }
@@ -428,7 +434,7 @@ export class SportsBoard extends EventTarget {
     this.backgroundLayer.destroyChildren(); this.annotationLayer.destroyChildren(); this.connectorLayer.destroyChildren(); this.contentLayer.destroyChildren(); this.nodeById.clear(); this.connectionRectById.clear();
     this.elementById = new Map(this.document.elements.map(element => [element.id, element]));
     const surface = this.registry.getSurface(this.document.surface.type);
-    const renderedSurface = surface.render(canonical.width, canonical.height, this.document.surface.data);
+    const renderedSurface = surfaceVariant(surface, this.orientation).render(canonical.width, canonical.height, this.document.surface.data);
     renderedSurface.listening(false);
     this.backgroundLayer.add(renderedSurface);
     const context = this.renderContext();
@@ -442,6 +448,7 @@ export class SportsBoard extends EventTarget {
         node.on('pointerdown', event => { if (this.mode === 'viewer') return; event.cancelBubble = true; if (this.permissions.select) this.select(element.id); });
         node.on('dblclick dbltap', event => { event.cancelBubble = true; this.activateElement(element.id); });
         let beforeDrag: BoardDocument | undefined;
+        let startRotation = 0;
         node.on('dragstart', () => { beforeDrag = clone(this.document); this.magnetCandidateById.delete(element.id); });
         node.on('dragmove', () => { this.applySnap(node); this.applyMagnet(node, element); this.scheduleConnectorRender(element.id); });
         node.on('dragend', () => {
@@ -459,14 +466,18 @@ export class SportsBoard extends EventTarget {
           }
           this.render(); this.select(element.id); this.emitChange();
         });
-        node.on('transformstart', () => { beforeDrag = clone(this.document); });
+        node.on('transformstart', () => { beforeDrag = clone(this.document); startRotation = node.rotation(); });
         node.on('transform', () => { this.keepLabelsUpright(node); this.scheduleConnectorRender(element.id); });
         node.on('transformend', () => {
           const resize = definition.resize;
           if (!this.permissions.rotate && (!resize || !this.permissions.editProperties)) return;
           if (beforeDrag) this.history.push(beforeDrag);
           const current = this.document.elements[this.indexOf(element.id)];
-          if (this.permissions.rotate) current.rotation = node.rotation();
+          // Store the gesture delta, not the rendered rotation: elements that
+          // counter-rotate in portrait render at 90 + element.rotation, so a
+          // raw node.rotation() write-back would accumulate that offset into
+          // the document on every gesture.
+          if (this.permissions.rotate) current.rotation = (current.rotation ?? 0) + (node.rotation() - startRotation);
           if (resize && this.permissions.editProperties) {
             const defaultWidth = typeof definition.defaults?.width === 'number' ? definition.defaults.width : .1;
             const defaultHeight = typeof definition.defaults?.height === 'number' ? definition.defaults.height : .1;
@@ -589,16 +600,19 @@ export class SportsBoard extends EventTarget {
     const scale = boundary?.shape === 'rectangle'
       ? 1 / Math.max(Math.abs(dx) / radiusX, Math.abs(dy) / radiusY)
       : 1 / Math.sqrt((dx * dx) / (radiusX * radiusX) + (dy * dy) / (radiusY * radiusY));
-    const edge = this.stageToNormalized(this.viewportToBoard(transform.point({ x: localCenter.x + dx * scale, y: localCenter.y + dy * scale })));
+    const edgeBoard = this.viewportToBoard(transform.point({ x: localCenter.x + dx * scale, y: localCenter.y + dy * scale }));
     const worldDx = target.x - center.x;
     const worldDy = target.y - center.y;
     const worldDistance = Math.hypot(worldDx, worldDy);
     const requestedMargin = (margin ?? boundary?.margin ?? .007) * canonical.width;
     const safeMargin = Math.min(requestedMargin, worldDistance * .2);
-    return {
-      x: edge.x + worldDx / worldDistance * safeMargin / canonical.width,
-      y: edge.y + worldDy / worldDistance * safeMargin / canonical.height
-    };
+    // The margin travels along the connector direction in stage space and is
+    // normalized in one step; dividing the axes separately would skew the gap
+    // in portrait, where stage and canonical axes are rotated against each other.
+    return this.stageToNormalized({
+      x: edgeBoard.x + worldDx / worldDistance * safeMargin,
+      y: edgeBoard.y + worldDy / worldDistance * safeMargin
+    });
   }
   private connectorEndpointPosition(element: BoardElement, key: 'from' | 'to'): Point {
     const endpoint = element[key] ?? { x: element.x ?? 0, y: element.y ?? 0 };

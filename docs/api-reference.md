@@ -131,7 +131,7 @@ The editor and viewer expose the same document and image API.
 
 Image options accept `width`, `pixelRatio`, `type`, and `quality`. A supplied output width preserves the surface ratio.
 
-The viewer additionally exposes `getBoard()` for advanced integrations. The editor keeps its lower-level board available from `editor.instance?.getBoard()`.
+The viewer additionally exposes `getBoard()` for advanced integrations. The editor keeps its lower-level board available from `editor.instance?.getBoard()`. The returned board reports the active rendering with `getOrientation()` and `getSurfaceRatio()`, and `setOrientationPreference('auto' | 'landscape' | 'portrait')` re-resolves it on demand — the imperative counterpart of the `orientation` attribute.
 
 ## Events
 

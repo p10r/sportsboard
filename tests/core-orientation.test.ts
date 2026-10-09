@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SportsBoard, surfaceVariant, type SurfaceDefinition } from '../src/core/index.js';
+import { Registry, SportsBoard, surfaceVariant, type BoardOptions, type SurfaceDefinition } from '../src/core/index.js';
 import { ORIENTATION_SWITCH_MARGIN, pickSurfaceOrientation } from '../src/core/interactions.js';
 
 const noop = (): never => {
@@ -71,6 +71,63 @@ describe('orientation picking', () => {
     const custom: SurfaceDefinition = { ratio: 1.6, render: noop, portrait: { ratio: 1.2, render: noop } };
     expect(pickSurfaceOrientation(custom, { width: 390, height: 624 }, 'landscape')).toBe('portrait');
     expect(pickSurfaceOrientation(custom, { width: 900, height: 500 }, 'portrait')).toBe('landscape');
+  });
+
+  it('switches only once the fit clears the hysteresis margin', () => {
+    // For ratio 1.6 in a 390-wide box, portrait covers 1.12x the landscape
+    // area at height ~412.7; below that both orientations stay put.
+    expect(pickSurfaceOrientation(rotating, { width: 390, height: 412 }, 'landscape')).toBe('landscape');
+    expect(pickSurfaceOrientation(rotating, { width: 390, height: 414 }, 'landscape')).toBe('portrait');
+    expect(ORIENTATION_SWITCH_MARGIN).toBe(1.12);
+  });
+});
+
+describe('board orientation resolution', () => {
+  const registry = new Registry();
+  registry.registerSurface('test.full', rotating);
+  registry.registerSurface('test.half', { ratio: 1, render: noop });
+
+  const makeResolver = (
+    options: Partial<BoardOptions>,
+    orientationBox: { width: number; height: number } = { width: 390, height: 624 },
+    current: 'landscape' | 'portrait' = 'landscape',
+    surface = 'test.full'
+  ) => {
+    const board = Object.setPrototypeOf(new EventTarget(), SportsBoard.prototype) as unknown as {
+      options: Partial<BoardOptions>;
+      registry: Registry;
+      document: { surface: { type: string } };
+      orientation: 'landscape' | 'portrait';
+      orientationBox(): { width: number; height: number };
+      resolveOrientation(): 'landscape' | 'portrait';
+    };
+    board.options = options;
+    board.registry = registry;
+    board.document = { surface: { type: surface } };
+    board.orientation = current;
+    board.orientationBox = () => orientationBox;
+    return board;
+  };
+
+  it('honors a locked landscape preference regardless of the host box', () => {
+    expect(makeResolver({ orientation: 'landscape' }).resolveOrientation()).toBe('landscape');
+  });
+
+  it('honors a locked portrait preference', () => {
+    expect(makeResolver({ orientation: 'portrait' }).resolveOrientation()).toBe('portrait');
+  });
+
+  it('falls back to landscape when a portrait-locked surface has no rotated variant', () => {
+    expect(makeResolver({ orientation: 'portrait' }, undefined, 'landscape', 'test.half').resolveOrientation()).toBe('landscape');
+  });
+
+  it('keeps the current orientation when the host box is empty', () => {
+    expect(makeResolver({}, { width: 0, height: 0 }, 'portrait').resolveOrientation()).toBe('portrait');
+  });
+
+  it('follows the host box automatically by default', () => {
+    expect(makeResolver({}).resolveOrientation()).toBe('portrait');
+    expect(makeResolver({}, { width: 900, height: 500 }, 'portrait').resolveOrientation()).toBe('landscape');
   });
 });
 

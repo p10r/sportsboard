@@ -3,6 +3,7 @@ import { resolveViewerMessages, SportsBoardCanvas, type SportsBoardCanvasOptions
 import { mountElementStyles } from './styles.js';
 import { viewerFactories } from './sports.js';
 import {
+  assertOrientationPreference,
   booleanAttribute,
   clone,
   copyOptions,
@@ -169,12 +170,14 @@ export class SportsBoardViewerElement extends HTMLElementBase {
   private resolveOptions(): SportsBoardViewerElementOptions {
     const serialized = this.getAttribute('options');
     const attributeOptions = serialized ? parseJSON<SportsBoardViewerElementOptions>(serialized, 'options attribute') : {};
-    return {
+    const options = {
       ...attributeOptions,
       ...this.elementOptions,
       controls: booleanAttribute(this, 'controls') ?? this.elementOptions.controls ?? attributeOptions.controls,
       interactive: booleanAttribute(this, 'interactive') ?? this.elementOptions.interactive ?? attributeOptions.interactive
     };
+    assertOrientationPreference(options.orientation);
+    return options;
   }
 
   private scheduleMount(): void {

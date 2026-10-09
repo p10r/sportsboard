@@ -1,5 +1,5 @@
 import type { BoardDocument, BoardImageOptions } from '../core/index.js';
-import { surfaceVariant } from '../core/registry.js';
+import { surfaceVariant } from '../core/index.js';
 import type { SportsBoardThumbnailOptions } from './types.js';
 import { SportsBoardViewer } from './viewer.js';
 

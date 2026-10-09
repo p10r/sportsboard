@@ -241,6 +241,9 @@ export class SportsBoardEditor extends EventTarget {
     this.canvasElement.addEventListener('viewportchange', event => {
       this.dispatchEvent(new CustomEvent('viewportchange', { detail: (event as CustomEvent).detail }));
     });
+    this.canvasElement.addEventListener('orientationchange', event => {
+      this.dispatchEvent(new CustomEvent('orientationchange', { detail: (event as CustomEvent).detail }));
+    });
     this.board = this.canvas.getBoard();
     this.board.addEventListener('orientationchange', () => this.applySurfaceRatio());
     this.applySurfaceRatio();
