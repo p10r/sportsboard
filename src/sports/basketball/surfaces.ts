@@ -191,6 +191,7 @@ export function registerBasketballSurfaces(registry: Registry): void {
   });
   registry.registerSurface('basketball.fullcourt', {
     ratio: (COURT_LENGTH + COURT_RUNOFF * 2) / (COURT_WIDTH + COURT_RUNOFF * 2),
-    render: renderFullCourt
+    render: renderFullCourt,
+    portrait: true
   });
 }
