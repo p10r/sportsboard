@@ -8,6 +8,11 @@ import { resolveEditorMessages } from '../src/editor/i18n.js';
 const context: RenderContext = {
   width: 800,
   height: 500,
+  orientation: 'landscape',
+  stageWidth: 800,
+  stageHeight: 500,
+  toStagePoint: point => point,
+  toCanonPoint: point => point,
   resolveEndpoint: endpoint => 'element' in endpoint ? { x: .5, y: .5 } : endpoint
 };
 

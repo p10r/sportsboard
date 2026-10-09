@@ -11,6 +11,7 @@ import {
   parseJSON,
   resolveElementData,
   resolveIdentity,
+  resolveOrientationPreference,
   upgradeProperty
 } from './shared.js';
 import type {
@@ -19,7 +20,7 @@ import type {
   SportsBoardViewerElementOptions
 } from './types.js';
 
-const observedAttributes = ['sport', 'locale', 'surface', 'controls', 'interactive', 'data', 'options'];
+const observedAttributes = ['sport', 'locale', 'surface', 'orientation', 'controls', 'interactive', 'data', 'options'];
 
 /** Canvas-only custom element for a built-in sport. */
 export class SportsBoardViewerElement extends HTMLElementBase {
@@ -126,6 +127,7 @@ export class SportsBoardViewerElement extends HTMLElementBase {
       interactive: options.interactive,
       locale: identity.locale,
       messages: options.messages,
+      orientation: options.orientation ?? resolveOrientationPreference(this),
       registry: sport.createRegistry()
     }, false);
     this.documentData = canvas.getDocument();
@@ -146,7 +148,7 @@ export class SportsBoardViewerElement extends HTMLElementBase {
     root.append(board);
     this.replaceChildren(root);
     this.instance = new SportsBoardCanvas(board, options);
-    for (const name of ['change', 'modechange', 'selectionchange', 'viewportchange'] as const) {
+    for (const name of ['change', 'modechange', 'selectionchange', 'viewportchange', 'orientationchange'] as const) {
       this.instance.addEventListener(name, event => {
         this.dispatchEvent(new CustomEvent(name, {
           detail: (event as CustomEvent).detail,

@@ -1,4 +1,4 @@
-import type { BoardDocument, BoardImageOptions, BoardOptions, Registry } from '../core/index.js';
+import type { BoardDocument, BoardImageOptions, BoardOptions, OrientationPreference, Registry, SurfaceOrientation } from '../core/index.js';
 
 export interface ViewerSurface {
   id: string;
@@ -42,6 +42,8 @@ export interface SportsBoardViewerOptions {
   interactive?: boolean;
   locale?: SportsBoardLocale;
   messages?: Partial<ViewerMessages>;
+  /** 'auto' follows the host box shape; explicit values lock the rendering. */
+  orientation?: OrientationPreference;
 }
 
 export interface SportsBoardThumbnailOptions extends Pick<BoardImageOptions, 'type' | 'quality'> {
@@ -49,4 +51,6 @@ export interface SportsBoardThumbnailOptions extends Pick<BoardImageOptions, 'ty
   sport: ViewerSportDefinition;
   /** Exact output width. Defaults to 640 px. */
   width?: number;
+  /** Thumbnail orientation; defaults to the authored landscape view. */
+  orientation?: SurfaceOrientation;
 }

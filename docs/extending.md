@@ -23,6 +23,19 @@ export function registerFootballSurfaces(registry: Registry): Registry {
 
 Surface renderers receive pixel dimensions but documents keep normalized positions.
 
+Full-size surfaces can opt into the rotated portrait rendering used on tall hosts:
+
+```ts
+registry.registerSurface('football.fullpitch', {
+  ratio: 105 / 68,
+  render: renderFullPitch,
+  // Rotates the authored render by 90 degrees when the host is taller than wide.
+  portrait: true
+});
+```
+
+`portrait: true` derives the rotated variant automatically: the stage takes the inverse ratio and the same render function draws the field through a rotated layer, so element positions and sizes stay landscape-normalized in documents. Pass an explicit `{ ratio, render }` instead when the rotated view should look different. Hosts lock the orientation with the `orientation` attribute or board option.
+
 ## Add an element
 
 ```ts

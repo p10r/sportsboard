@@ -117,7 +117,7 @@ One editor instance owns one sport. The application chooses the sport when it re
 
 ### Tablet, mobile, and keyboard use
 
-The editor adapts to the width of its own container. On compact layouts, coaches switch between **Tools**, **Board**, and **Inspector** using the bottom navigation. Tapping a tool adds it at the center and returns to the board; desktop users can also drag tools directly onto the field. Double-click or double-tap an element or movement to open its editable properties. Touch gestures support element movement, pinch zoom, and panning an empty area while zoomed. On desktop, the wheel scrolls the surrounding page normally; hold `Cmd` or `Ctrl` while using it to zoom the board.
+The editor adapts to the width of its own container. On compact layouts, coaches switch between **Tools**, **Board**, and **Inspector** using the bottom navigation. Full courts and pitches turn by 90 degrees on tall hosts so the field follows the length of the screen, the same angle as the half-court view; diagrams keep their positions either way. Tapping a tool adds it at the center and returns to the board; desktop users can also drag tools directly onto the field. Double-click or double-tap an element or movement to open its editable properties. Touch gestures support element movement, pinch zoom, and panning an empty area while zoomed. On desktop, the wheel scrolls the surrounding page normally; hold `Cmd` or `Ctrl` while using it to zoom the board.
 
 The **Notes** button opens a dedicated writing drawer instead of using the narrow element inspector. It becomes a full-width sheet on compact layouts, saves while the coach types, and shows an indicator when the document contains notes.
 

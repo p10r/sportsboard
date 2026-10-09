@@ -173,7 +173,8 @@ const withMovementLabel = (
   node: Konva.Shape | Konva.Group,
   element: BoardElement,
   centerline: PixelPoint[],
-  color: string
+  color: string,
+  context: RenderContext
 ): Konva.Group => {
   const group = node instanceof Konva.Group ? node : new Konva.Group();
   if (group !== node) group.add(node);
@@ -191,9 +192,14 @@ const withMovementLabel = (
     listening: false
   });
   const bounds = text.getClientRect({ skipTransform: true, skipShadow: true, skipStroke: true });
+  // The label always reads upright on screen; in portrait the group is placed in
+  // canonical space and counter-rotated against the scene layer rotation.
+  const screenAnchor = context.toStagePoint(point);
+  const position = context.toCanonPoint({ x: screenAnchor.x - bounds.width / 2, y: screenAnchor.y - bounds.height - 10 });
   const label = new Konva.Group({
-    x: point.x - bounds.width / 2,
-    y: point.y - bounds.height - 10,
+    x: position.x,
+    y: position.y,
+    rotation: context.orientation === 'portrait' ? 90 : 0,
     listening: false
   });
   label.add(new Konva.Rect({
@@ -269,10 +275,12 @@ const zone = (element: BoardElement, context: RenderContext): Konva.Group => {
 
 const freeText = (element: BoardElement, context: RenderContext): Konva.Group => {
   const value = String(element.data?.text ?? 'Text').slice(0, 500);
-  const width = (element.width ?? .32) * context.width;
-  const baseHeight = (element.height ?? .11) * context.height;
+  // Text stays readable on screen, so the box follows the stage axes, while the
+  // position stays anchored to the court. Identical to the old math in landscape.
+  const width = (element.width ?? .32) * context.stageWidth;
+  const baseHeight = (element.height ?? .11) * context.stageHeight;
   const padding = Math.max(9, width * .05);
-  const fontSize = value.length > 320 ? 9 : value.length > 180 ? 10 : Math.max(10.5, Math.min(14, context.width * .018));
+  const fontSize = value.length > 320 ? 9 : value.length > 180 ? 10 : Math.max(10.5, Math.min(14, context.stageWidth * .018));
   const text = new Konva.Text({
     text: value,
     x: padding,
@@ -289,7 +297,7 @@ const freeText = (element: BoardElement, context: RenderContext): Konva.Group =>
   const contentHeight = text.height();
   // Keep one extra line of breathing room because Konva's wrapped text height
   // can land on a fractional boundary and otherwise clip the final line.
-  const height = Math.min(context.height * .45, Math.max(baseHeight, contentHeight + padding * 2 + fontSize * 1.2));
+  const height = Math.min(context.stageHeight * .45, Math.max(baseHeight, contentHeight + padding * 2 + fontSize * 1.2));
   const group = new Konva.Group({
     x: (element.x ?? 0) * context.width,
     y: (element.y ?? 0) * context.height,
@@ -297,7 +305,7 @@ const freeText = (element: BoardElement, context: RenderContext): Konva.Group =>
     height,
     offsetX: width / 2,
     offsetY: height / 2,
-    rotation: element.rotation ?? 0
+    rotation: (context.orientation === 'portrait' ? 90 : 0) + (element.rotation ?? 0)
   });
   const color = elementColor(element, '#0f172a');
   group.add(new Konva.Rect({
@@ -336,10 +344,15 @@ const marker = (element: BoardElement, context: RenderContext): Konva.Group => {
     shadowBlur: 5,
     shadowOpacity: .2
   }));
-  group.add(new Konva.Text({
+  const label = new Konva.Group({
+    x: width / 2,
+    y: height / 2,
+    offsetX: radius,
+    offsetY: radius,
+    rotation: context.orientation === 'portrait' ? 90 : 0
+  });
+  label.add(new Konva.Text({
     text: String(element.data?.text ?? 'A').slice(0, 3),
-    x: width / 2 - radius,
-    y: height / 2 - radius,
     width: radius * 2,
     height: radius * 2,
     align: 'center',
@@ -349,6 +362,7 @@ const marker = (element: BoardElement, context: RenderContext): Konva.Group => {
     fontSize: radius * .9,
     fontStyle: 'bold'
   }));
+  group.add(label);
   return group;
 };
 
@@ -395,8 +409,8 @@ export function registerBuiltins(registry = new Registry()): Registry {
       const tension = Number.isFinite(configuredTension) ? Math.max(0, Math.min(1, configuredTension)) : element.waypoints?.length ? .5 : 0;
       const centerline = smoothRoute(points, tension);
       const smoothPoints = centerline.flatMap(point => [point.x, point.y]);
-      if (line === 'screen') return withMovementLabel(screenShape(smoothPoints, color, width, 0, hitWidth), element, centerline, color);
-      if (line === 'shot') return withMovementLabel(shotShape(smoothPoints, color, width, 0, hitWidth), element, centerline, color);
+      if (line === 'screen') return withMovementLabel(screenShape(smoothPoints, color, width, 0, hitWidth), element, centerline, color, context);
+      if (line === 'shot') return withMovementLabel(shotShape(smoothPoints, color, width, 0, hitWidth), element, centerline, color, context);
       const configuredAmplitude = Number(element.style?.waveAmplitude);
       const configuredWavelength = Number(element.style?.wavelength);
       const configuredArrowLead = Number(element.style?.arrowLead);
@@ -417,7 +431,7 @@ export function registerBuiltins(registry = new Registry()): Registry {
         tension: 0,
         lineCap: 'round',
         lineJoin: 'round'
-      }), element, centerline, color);
+      }), element, centerline, color, context);
     }
   });
   registry.registerElement(CoreElements.zone, {

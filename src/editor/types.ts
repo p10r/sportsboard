@@ -1,4 +1,4 @@
-import type { BoardDocument, ElementInput, Endpoint, Point, SportsBoard } from '../core/index.js';
+import type { BoardDocument, ElementInput, Endpoint, OrientationPreference, Point, SportsBoard } from '../core/index.js';
 import type { SportsBoardLocale, ViewerMessages, ViewerSportDefinition, ViewerSurface } from '../viewer/index.js';
 
 export type { SportsBoardLocale } from '../viewer/index.js';
@@ -131,6 +131,8 @@ export interface SportsBoardEditorOptions {
   surface?: string;
   saveLabel?: string;
   showSave?: boolean;
+  /** 'auto' follows the workspace box shape; explicit values lock the rendering. */
+  orientation?: OrientationPreference;
   colorPalette?: EditorColorOption[];
   /** Selects one of the built-in JSON message catalogs. Defaults to English. */
   locale?: SportsBoardLocale;

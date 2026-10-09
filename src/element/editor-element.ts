@@ -11,6 +11,7 @@ import {
   parseJSON,
   resolveElementData,
   resolveIdentity,
+  resolveOrientationPreference,
   upgradeProperty
 } from './shared.js';
 import type {
@@ -21,7 +22,7 @@ import type {
   SportsBoardElementSaveDetail
 } from './types.js';
 
-const observedAttributes = ['sport', 'locale', 'surface', 'show-save', 'data', 'options'];
+const observedAttributes = ['sport', 'locale', 'surface', 'orientation', 'show-save', 'data', 'options'];
 
 /** Complete editing interface for one built-in sport. */
 export class SportsBoardEditorElement extends HTMLElementBase {
@@ -127,6 +128,7 @@ export class SportsBoardEditorElement extends HTMLElementBase {
       surface: identity.surface,
       locale: identity.locale,
       messages: options.messages,
+      orientation: options.orientation ?? resolveOrientationPreference(this),
       showSave: options.showSave,
       saveLabel: options.saveLabel,
       colorPalette: options.colorPalette,

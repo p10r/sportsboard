@@ -1,4 +1,5 @@
 import type { BoardDocument, BoardImageOptions } from '../core/index.js';
+import { surfaceVariant } from '../core/registry.js';
 import type { SportsBoardThumbnailOptions } from './types.js';
 import { SportsBoardViewer } from './viewer.js';
 
@@ -10,8 +11,9 @@ const nextPaint = (): Promise<void> => new Promise(resolve => requestAnimationFr
 async function withThumbnailViewer<T>(options: SportsBoardThumbnailOptions, exporter: (viewer: SportsBoardViewer, image: BoardImageOptions) => T | Promise<T>): Promise<T> {
   const document = parseDocument(options.data);
   const width = Math.max(1, Math.round(options.width ?? 640));
+  const orientation = options.orientation ?? 'landscape';
   const surface = options.sport.createRegistry().getSurface(document.surface.type);
-  const height = Math.max(1, Math.round(width / surface.ratio));
+  const height = Math.max(1, Math.round(width / surfaceVariant(surface, orientation).ratio));
   const target = window.document.createElement('div');
   target.setAttribute('aria-hidden', 'true');
   Object.assign(target.style, {
@@ -32,6 +34,7 @@ async function withThumbnailViewer<T>(options: SportsBoardThumbnailOptions, expo
       sport: options.sport,
       width,
       height,
+      orientation,
       controls: false,
       interactive: false
     });

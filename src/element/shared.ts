@@ -1,4 +1,4 @@
-import type { BoardDocument } from '../core/index.js';
+import type { BoardDocument, OrientationPreference } from '../core/index.js';
 import type { SportsBoardLocale } from '../viewer/types.js';
 import type { BuiltInSport, SportsBoardElementOptions } from './types.js';
 
@@ -32,6 +32,14 @@ export function resolveIdentity(element: HTMLElement, options: SportsBoardElemen
   if (sport !== 'basketball' && sport !== 'football' && sport !== 'volleyball') throw new Error(`Unknown SportsBoard sport '${sport}'`);
   if (locale !== 'en' && locale !== 'fr') throw new Error(`Unknown SportsBoard locale '${locale}'`);
   return { sport, locale, surface: element.getAttribute('surface') ?? options.surface };
+}
+
+/** Reads the orientation attribute: absent means 'auto', anything else must name a preference. */
+export function resolveOrientationPreference(element: HTMLElement): OrientationPreference {
+  const value = element.getAttribute('orientation');
+  if (value === null || value === 'auto') return 'auto';
+  if (value === 'landscape' || value === 'portrait') return value;
+  throw new Error(`Unknown SportsBoard orientation '${value}'`);
 }
 
 export function resolveElementData(

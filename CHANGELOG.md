@@ -6,6 +6,7 @@ All notable changes to SportsBoard are documented in this file. The project foll
 
 ### Added
 
+- Full-court surfaces now render rotated on tall hosts: basketball, football, and volleyball full fields turn by 90 degrees on phones so the length of the court follows the length of the screen, matching the half-court angle. Element positions stay landscape-normalized in documents, resizing never mutates them, and the new `orientation` attribute/option (`auto`, `landscape`, `portrait`) locks the rendering. Exports follow the on-screen orientation; the thumbnail helpers accept an explicit `orientation`, and both elements fire `orientationchange` when a resize flips it.
 - Volleyball is now a built-in sport with half-court and full-court surfaces, six numbered attackers and defenders per side, a coach, a snapping volleyball, a training cone, and run, pass, set, spike, and block movements.
 
 ## [1.1.1] - 2026-09-03

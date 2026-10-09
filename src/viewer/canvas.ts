@@ -3,7 +3,7 @@ import { mountViewerStyles } from './styles.js';
 import { resolveViewerMessages } from './i18n.js';
 import type { SportsBoardCanvasOptions, ViewerMessages } from './types.js';
 
-const FORWARDED_EVENTS = ['change', 'modechange', 'selectionchange', 'viewportchange'] as const;
+const FORWARDED_EVENTS = ['change', 'modechange', 'selectionchange', 'viewportchange', 'orientationchange'] as const;
 
 /** Konva canvas shared by the viewer and editor packages. */
 export class SportsBoardCanvas extends EventTarget {
@@ -28,7 +28,11 @@ export class SportsBoardCanvas extends EventTarget {
     this.stageHost.className = 'sb-canvas__stage';
     this.root.append(this.stageHost);
     this.target.replaceChildren(this.root);
+    // The canvas is centered inside the target, so the target's box — not the
+    // content-sized stage host — defines the space the orientation must fit.
+    boardOptions.orientationSource ??= element;
     this.board = new SportsBoard(this.stageHost, boardOptions, registry);
+    this.board.addEventListener('orientationchange', () => this.applySurfaceRatio());
     this.applySurfaceRatio();
     if (controls) this.mountViewportControls();
     for (const name of FORWARDED_EVENTS) {
@@ -48,8 +52,7 @@ export class SportsBoardCanvas extends EventTarget {
   destroy(): void { this.board.destroy(); this.target.replaceChildren(); }
 
   private applySurfaceRatio(): void {
-    const surface = this.board.registry.getSurface(this.board.getDocument().surface.type);
-    this.root.style.setProperty('--sb-surface-ratio', String(surface.ratio));
+    this.root.style.setProperty('--sb-surface-ratio', String(this.board.getSurfaceRatio()));
   }
 
   private mountViewportControls(): void {

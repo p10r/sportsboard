@@ -18,6 +18,10 @@ Hurdles and poles are inserted into the sport's existing Equipment section inste
 
 Movements accept an optional label. Run, dribble, and pass can be converted from the Inspector without changing endpoints, element attachments, waypoints, color, or label.
 
+## Responsive orientation
+
+Every full-size surface also renders rotated: when the host space is taller than it is wide, the field turns by 90 degrees so the length of the court follows the length of the screen — the same angle coaches already know from the half-court view. Element positions stay landscape-normalized in documents, so diagrams open unchanged across phones and desktops. Half courts keep their authored layout. Applications can lock the rendering with the `orientation` attribute (`auto`, `landscape`, or `portrait`); see the [API reference](api-reference.md).
+
 ## Basketball
 
 ```html
@@ -28,7 +32,7 @@ Movements accept an optional label. Run, dribble, and pass can be converted from
 Available surfaces:
 
 - `basketball.halfcourt`;
-- `basketball.fullcourt`.
+- `basketball.fullcourt` (also renders rotated on tall hosts).
 
 Both surfaces include 1.25 metres of usable wooden floor around every court boundary. The inset boundary lines make the playing area explicit while leaving enough room for waiting players, coaches, and equipment without overwhelming the diagram.
 
@@ -76,7 +80,7 @@ board.add(Basketball.run('player-2', { x: 0.7, y: 0.25 }));
 Available surfaces:
 
 - `football.halfpitch`;
-- `football.fullpitch`.
+- `football.fullpitch` (also renders rotated on tall hosts).
 
 The playable areas use the proportions and main markings of a 105 × 68 metre pitch. The half pitch keeps a 68 × 52.5 metre playing area. Both surfaces add four metres of usable grass outside every touchline and goal line; goals are rendered in this outer area.
 
@@ -115,7 +119,7 @@ board.add(Football.pass('player-9', 'player-10'));
 Available surfaces:
 
 - `volleyball.halfcourt`;
-- `volleyball.fullcourt`.
+- `volleyball.fullcourt` (also renders rotated on tall hosts, matching the half-court angle on phones).
 
 The playable areas use the proportions and main markings of an 18 × 9 metre court. The half court keeps one 9 × 9 metre side with the net on its boundary; both surfaces add three metres of usable floor outside every boundary line. The net, its posts, and the antennae are rendered in this outer area so players and routes stay inside the playable surface.
 
